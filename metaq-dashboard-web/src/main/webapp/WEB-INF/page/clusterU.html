@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/cluster.css" rel="stylesheet">
+    <link href="css/docs.css" rel="stylesheet">
+    <link rel="shortcut icon" href="img/metaq-32.ico">
+    <script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+    <script type="text/javascript" src="js/jquery.ba-bbq.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/metaq.js"></script>
+    <title>MetaQ-Dashboard</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div><img src="img/metaq-logo.png"/></div>
+    <div class="row-fluid">
+        <#include "/menu.html" />
+        <div class="span8" id="main-content">
+
+            <div id="handleTopicDiv" class="hide" style="position:fixed; margin-left:50px; margin-top:80px; z-index: 99;background-color:white; width:50%;height:14%;overflow:auto;border:1px solid grey;color:#7B7B7B">
+                <div id="infoDiv" style=" margin-top:6px; text-align:center">
+
+                </div>
+                <div style="text-align: right; margin-right: 6px;margin-top: 8px">
+                    <button id="leaveButton" class="btn"  onclick="leaveTopic()"></button>
+                    <button id="deleteButton" class="btn" onclick="deleteTopic()">删除该无效topic</button>
+                </div>
+            </div>
+
+            <div>
+                <table class= "table table-bordered">
+                    <caption><h3>信息查询</h3></caption>
+                    <thead>
+                    <tr>
+                        <th>请选择Metaq集群连接串</th>
+                        <th>请选择group名称</th>
+                        <th>请选择topic名称</th>
+                    </tr>
+                    </thead>
+                    <tr>
+                        <td>
+                            <select id="selectZkUrl" name="selectZkUrl" onchange="getGroups(this.value)">
+                                <option value="-1">——请选择——</option>
+                                <#if zkUrls?exists>
+                                    <#list zkUrls as zkUrl>
+                                        <option value="${zkUrl?if_exists}">${zkUrl?if_exists}</option>
+                                    </#list>
+                                </#if>
+                            </select>
+                        </td>
+                        <td>
+                            <select id="selectGroup" name="selectGroup"  onchange="getTopics(this.value)">
+                                <option value="-1">——请选择——</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select id="selectTopic" name="selectTopic" onchange="getOffset(this.value)">
+                                <option value="-1">——请选择——</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+
+                <table id="supervisors" class= "table table-bordered hide">
+                    <tr>
+                        <th>已有监控用户（删除用户需进行身份验证）</th>
+                        <th>新增监控用户（需进行身份验证）</th>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table id="showSupervisorsTable" class= "table table-bordered">
+
+                            </table>
+
+                            <div id="deleteSupervisorDiv" class="hide" style="position:fixed; margin-left:50px; margin-top:-80px; z-index: 99;background-color:white; width:30%;height:30%;overflow:auto;border:1px solid grey;color:#7B7B7B">
+                                <br>
+                                &nbsp;&nbsp;<font style="font-size:16px;">请进行身份验证：</font><br><br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;域账户：<input id="userName2" name="userName2" type="text" style="width:150px" value="">@sohu-inc.com<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;域密码：<input id="password2" name="password2" type="password" style="width:150px" value=""><br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;<button id="deleteSupervisor" class="btn" onclick="deleteSupervisor()">删除</button>
+                                &nbsp;&nbsp;&nbsp;&nbsp;<button id="deleteSupervisorCancel" class="btn" onclick="deleteSupervisorCancel()">取消</button>
+                            </div>
+                        </td>
+                        <td>
+                            域账户：<input id="userName1" name="userName1" type="text" style="width:150px" value="">@sohu-inc.com<br>
+                            域密码：<input id="password1" name="password1" type="password" style="width:150px" value=""><br>
+                            <button id="addSupervisor" class="btn" onclick="addSupervisor()">添加</button>
+                        </td>
+                    </tr>
+                </table>
+
+                <table id="offsetResultSum" class= "table table-bordered hide">
+                    <tr>
+                        <th>积压消息总量（估算）</th>
+                        <th>已消费消息总量（估算）</th>
+                        <th>操作</th>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td><button id="refreshButton" class="btn" onclick="refreshOffset()">刷新</button></td>
+                    </tr>
+                </table>
+
+                <table id="offsetResult" class= "table table-bordered hide">
+                    <tr>
+                        <th>分区信息</th>
+                        <th>消费者信息</th>
+                        <th>积压消息数量（估算）</th>
+                        <th>积压消息字节数</th>
+                        <th>已消费消息数量（估算）</th>
+                        <th>已消费消息字节数</th>
+                        <th>当前已消费至地址</th>
+                    </tr>
+
+                </table>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    var zkUrlStore = "-1";
+    var groupStore = "-1";
+    var topicStore = "-1";
+
+    var getGroups = function(zkUrl) {
+        zkUrlStore = zkUrl;
+
+        if(zkUrl == -1) {
+            jQuery("#selectGroup").empty();
+            jQuery("#selectGroup").append("<option value='-1'>——请选择——</option>");
+            jQuery("#selectTopic").empty();
+            jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+            return;
+        }
+
+        var dataSet = {
+            'zkUrl':zkUrl
+        };
+        jQuery.ajax({
+            async: false,
+            type: "POST",
+            url: "getGroups.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                if(data.success){
+                    var groups = data.groups;
+                    jQuery("#selectGroup").empty();
+                    jQuery("#selectGroup").append("<option value='-1'>——请选择——</option>");
+                    for(var i=0; i<groups.length;i++) {
+                        jQuery("#selectGroup").append("<option value='"+groups[i]+"'>"+groups[i]+"</option>");
+                    }
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var getTopics = function(group) {
+        groupStore = group;
+
+        if(group == -1) {
+            jQuery("#selectTopic").empty();
+            jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+            return;
+        }
+
+        var dataSet = {
+            'zkUrl':zkUrlStore,
+            'group':group
+        };
+        jQuery.ajax({
+            async: false,
+            type: "POST",
+            url: "getTopicsByGroup.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                if(data.success){
+                    var topics = data.topics;
+                    jQuery("#selectTopic").empty();
+                    jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+                    for(var i=0; i<topics.length;i++) {
+                        jQuery("#selectTopic").append("<option value='"+topics[i]+"'>"+topics[i]+"</option>");
+                    }
+                } else {
+                    showNoTopic();
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var getOffset = function(topic) {
+        topicStore = topic;
+
+        if(topic == -1) {
+            return;
+        }
+
+        if(topic == "-1") {
+            return;
+        } else {
+            showSupervisors(); //新增功能：监控用户模块
+            getOffsetReal();
+        }
+    }
+
+    var refreshOffset = function() {
+        getOffsetReal();
+    }
+
+    var getOffsetReal = function() {
+        var dataSet = {
+            'zkUrl':zkUrlStore,
+            'group':groupStore,
+            'topic':topicStore
+        };
+        jQuery.ajax({
+            type: "POST",
+            url: "getOffset.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                if(data.success){
+                    $("#offsetResult tr").empty();
+                    var avg = data.avg;
+                    var avgSize = 1;
+                    for(var avgKey in avg) {
+                        var avgArray = new Array();
+                        avgArray = avg[avgKey].split("#");
+                        //alert(avgArray[1]+","+avgArray[0]);
+                        if(avgArray.length==2 && avgArray[0]!=0) {
+                            avgSize = Math.round(avgArray[1] / avgArray[0]);
+                        }
+                    }
+
+                    var isOutOfDate = data.isOutOfDate;
+
+                    var mmOffset = data.mmOffset;
+                    var mmOffsetJson = eval('('+mmOffset+')');
+                    var pendingNumSum = 0;
+                    var consumedNumSum = 0;
+                    for(var mmOffsetJsonKey in mmOffsetJson){
+                        var pending;
+                        var pendingNum;
+                        var consumed;
+                        var consumedNum;
+                        var mmOffsetArray = new Array();
+                        mmOffsetArray = mmOffsetJson[mmOffsetJsonKey].split("#");
+                        if(typeof(mmOffsetArray[2])=="undefined") {
+                            mmOffsetArray[2] = 0;
+                        }
+                        pending = mmOffsetArray[1]-mmOffsetArray[2];
+                        pendingNum = Math.round(pending/avgSize);
+                        pendingNumSum = pendingNumSum + pendingNum;
+
+                        consumed = mmOffsetArray[2]-mmOffsetArray[0];
+                        if(consumed >= 0) {
+                            consumedNum = Math.round(consumed/avgSize);
+                            consumedNumSum = consumedNumSum + consumedNum;
+                        } else {
+                            consumed = "积压时间过长,历史数据已删除,无法计算";
+                            consumedNum = "积压时间过长,历史数据已删除,无法计算";
+                        }
+
+                        var row = "<tr><td>"+ mmOffsetJsonKey +"分区</td><td>"+ mmOffsetArray[3] +"</td><td>"+ pendingNum +"</td><td>"+ pending +"</td><td>"+ consumedNum +"</td><td>"+ consumed +"</td><td>"+ mmOffsetArray[2] +"</td><td><button  class=\"btn\" onclick=\"skip('"+mmOffsetJsonKey+"')\">跳过积压</button></td></tr>"
+                        $(row).insertAfter($("#offsetResult tr:eq("+ 0 +")"));
+                    }
+                    var tableTitle = "<tr><th>分区信息</th><th>消费者信息</th><th>积压消息数量（估算）</th><th>积压消息字节数</th><th>已消费消息数量（估算）</th><th>已消费消息字节数</th><th>当前已消费至地址</th><th>操作</th></tr>";
+                    $(tableTitle).insertAfter($("#offsetResult tr:eq("+ 0 +")"));
+                    $("#offsetResult").removeClass().addClass("table table-bordered ");
+
+                    $("#offsetResultSum tr:eq(1) td:nth-child(1)").html(pendingNumSum);
+                    $("#offsetResultSum tr:eq(1) td:nth-child(2)").html(consumedNumSum);
+                    $("#offsetResultSum").removeClass().addClass("table table-bordered ");
+
+                    if(isOutOfDate && pendingNumSum > 1000) {
+                        showInactive();
+                    }
+                } else {
+                    showNoData();
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var skip = function(serverUrl) {
+        var url = new Array();
+        url = serverUrl.split("#");
+
+        if(confirm ("确定将跳过group为" + groupStore + ",topic为" + topicStore + ",partition为" + url[1] + "的积压消息?")) {
+            var dataSet = {
+                'zkUrl': zkUrlStore,
+                'group': groupStore,
+                'topic': topicStore,
+                'partition': url[1],
+                'serverUrl': url[0]
+            };
+            jQuery.ajax({
+                type: "POST",
+                url: "skip.do",
+                data: dataSet,
+                dataType: "text",
+                cache: false,
+                success: function (data) {
+                    if(data == "success") {
+                        alert(data);
+                        refreshOffset();
+                    } else {
+                        alert("数据异常,无法支持");
+                    }
+                },
+                error: function (xmlHttpRequest, textStatus, errorThrown) {
+                    alert(errorThrown);
+                }
+            });
+        }
+    }
+
+    var showNoTopic = function() {
+        $("#infoDiv").html("没有找到任何数据, 疑似为无效group.");
+        $("#leaveButton").html("我是新建的,稍后使用");
+        $("#deleteButton").html("删除该无效group");
+        $("#handleTopicDiv").removeClass();
+    }
+
+    var showNoData = function() {
+        $("#infoDiv").html("没有找到任何数据, 原因可能是因为该Topic是最近新建的, 尚无数据; 或者即为无用topic.");
+        $("#leaveButton").html("我是新建的,稍后使用");
+        $("#handleTopicDiv").removeClass();
+    }
+
+    var showInactive = function() {
+        $("#infoDiv").html("该group下所属的topic数据已超过30天未消费,积压消息已超过1000条,疑似为失效topic.");
+        $("#leaveButton").html("我将继续使用,请保留");
+        $("#handleTopicDiv").removeClass();
+    }
+
+    var leaveTopic = function() {
+        $("#handleTopicDiv").removeClass().addClass("hide");
+        $("#infoDiv").html("");
+        $("#leaveButton").html("");
+        $("#deleteButton").html("删除该无效topic");
+    }
+
+    var deleteTopic = function() {
+        var dataSet = {
+            'zkUrl': zkUrlStore,
+            'group': groupStore,
+            'topic': topicStore
+        };
+
+        jQuery.ajax({
+            type: "POST",
+            url: "deleteTopic.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function (data) {
+                leaveTopic();
+                alert("删除成功");
+                if(data.success) {
+                    $("#selectTopic").find("option:selected").remove();
+                    $("#selectTopic").val("-1");
+                    if(data.groupDelete) {
+                        $("#selectGroup").find("option:selected").remove();
+                        $("#selectGroup").val("-1");
+                    }
+                    shutdownDataArea();
+                } else {
+                    alert("删除时遇到问题,无法删除");
+                }
+            },
+            error: function (xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var showSupervisors = function() {
+        var dataSet = {
+            'zkUrl': zkUrlStore,
+            'group': groupStore,
+            'topic': topicStore
+        };
+
+        jQuery.ajax({
+            type: "POST",
+            url: "getSupervisors.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function (data) {
+                $("#supervisors").removeClass().addClass("table table-bordered ");
+                $("#showSupervisorsTable tr").empty();
+                if(data.success) {
+                    var supervisors = data.supervisors;
+                    var supervisorArray = supervisors.split(",");
+                    for(var i=0;i<supervisorArray.length;i++) {
+                        var row = "<tr><td>"+supervisorArray[i]+"</td><td><button  class=\"btn\" onclick=\"deleteSupervisorConfirm('"+supervisorArray[i]+"')\">删除</button></td></tr>";
+                        $("#showSupervisorsTable").append(row);
+                    }
+
+                } else {
+                    var row = "<tr><td>暂无监控用户</td></tr>";
+                    $("#showSupervisorsTable").append(row);
+                    //$(row).insertAfter($("#showSupervisorsTable tr:eq("+ 0 +")"));
+                }
+            },
+            error: function (xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+
+    }
+
+    var addSupervisor = function() {
+        var userName = $("#userName1").val();
+        var password = $("#password1").val();
+        if(userName==""|| password=="") {
+            alert("请填写域账户和域密码");
+            return;
+        }
+
+
+        var dataSet = {
+            'zkUrl': zkUrlStore,
+            'group': groupStore,
+            'topic': topicStore,
+            'userName': userName,
+            'password': password
+        };
+
+        jQuery.ajax({
+            type: "POST",
+            url: "addSupervisor.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function (data) {
+                if(data.success) {
+                    alert("添加成功");
+                    $("#userName1").val("");
+                    $("#password1").val("");
+                    showSupervisors();
+                } else {
+                    alert("身份验证失败")
+                }
+            },
+            error: function (xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+
+    }
+
+    var deleteSupervisorConfirm = function(userName) {
+        $("#userName2").val(userName);
+        $("#deleteSupervisorDiv").removeClass();
+    }
+
+    var deleteSupervisorCancel = function() {
+        $("#userName2").val("");
+        $("#password2").val("");
+        $("#deleteSupervisorDiv").removeClass().addClass("hide");
+    }
+
+    var deleteSupervisor = function() {
+        var userName = $("#userName2").val();
+        var password = $("#password2").val();
+        if(userName==""|| password=="") {
+            alert("请填写域账户和域密码");
+            return;
+        }
+
+        var dataSet = {
+            'zkUrl': zkUrlStore,
+            'group': groupStore,
+            'topic': topicStore,
+            'userName': userName,
+            'password': password
+        };
+
+        jQuery.ajax({
+            type: "POST",
+            url: "deleteSupervisor.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function (data) {
+                if(data.success) {
+                    deleteSupervisorCancel();
+                    showSupervisors();
+                } else {
+                    alert("删除失败")
+                }
+            },
+            error: function (xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var shutdownDataArea = function() {
+        $("#supervisors").removeClass().addClass("table table-bordered hide");
+        $("#offsetResultSum").removeClass().addClass("table table-bordered hide");
+        $("#offsetResult").removeClass().addClass("table table-bordered hide");
+    }
+
+
+    $(function(){
+        $("#selectZkUrl").children("option").each(function(){
+            if($(this).text()=="10.22.10.122:2181,10.22.10.134:2181,10.22.10.133:2181") {
+                $(this).text("基础业务组测试集群");
+            } else if ($(this).text()=="10.10.78.95:2181,10.10.78.61:2181,10.10.77.208:2181,10.10.52.114:2181,10.10.52.115:2181") {
+                $(this).text("基础业务组正式集群");
+            } else if ($(this).text()=="10.10.53.93:2181,10.10.53.20:2181,10.10.53.21:2181") {
+                $(this).text("pq组集群");
+            }
+        });
+
+        <#if zkUrlPre??>
+            <#if groupPre??>
+                <#if topicPre??>
+                    zkUrlStore = "${zkUrlPre}";
+                    $("#selectZkUrl").val(zkUrlStore);
+                    getGroups(zkUrlStore);
+                    groupStore = "${groupPre}";
+                    $("#selectGroup").val(groupStore);
+                    getTopics(groupStore);
+                    topicStore = "${topicPre}";
+                    $("#selectTopic").val(topicStore);
+                    getOffset(topicStore);
+                </#if>
+            </#if>
+        </#if>
+
+    });
+
+</script>
+
+</body>
+</html>
+

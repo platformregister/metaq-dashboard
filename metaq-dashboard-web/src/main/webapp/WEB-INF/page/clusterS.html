@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/cluster.css" rel="stylesheet">
+    <link href="css/docs.css" rel="stylesheet">
+    <link rel="shortcut icon" href="img/metaq-32.ico">
+    <script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+    <script type="text/javascript" src="js/jquery.ba-bbq.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/metaq.js"></script>
+    <title>MetaQ-Dashboard</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div><img src="img/metaq-logo.png"/></div>
+    <div class="row-fluid">
+        <#include "/menu.html" />
+        <div class="span8" id="main-content">
+            <div>
+                <table class= "table table-bordered">
+                    <caption><h3>Topic查询</h3></caption>
+                    <thead>
+                    <tr>
+                        <th>请先选择Metaq集群连接串</th>
+                        <th>请填入待查询的topic名称</th>
+                        <th>操作</th>
+
+                    </tr>
+                    </thead>
+                    <tr>
+                        <td>
+                            <select id="selectZkUrl" name="selectZkUrl" >
+                                <option value="-1">——请选择——</option>
+                                <#if zkUrls?exists>
+                                    <#list zkUrls as zkUrl>
+                                        <option value="${zkUrl?if_exists}">${zkUrl?if_exists}</option>
+                                    </#list>
+                                </#if>
+                            </select>
+                        </td>
+                        <td>
+                            <input id="topicName" name="topicName" type="text" style="width:150px" value="">
+                        </td>
+                        <td>
+                            <button id="refreshSearch" class="btn" onclick="search()">查询</button>
+                        </td>
+
+                    </tr>
+                </table>
+
+
+                <table id="searchTable" class= "table table-bordered">
+
+                </table>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    var zkUrlStore = "-1";
+    var groupStore = "-1";
+    var topicStore = "-1";
+    var topicNameStore = "";
+
+    var search = function() {
+        zkUrlStore = $("#selectZkUrl").val();;
+        topicNameStore = $("#topicName").val();
+        var dataSet = {
+            'zkUrl':zkUrlStore,
+            'targetTopic':topicNameStore
+        };
+        jQuery.ajax({
+            type: "POST",
+            url: "getMachinesByTopic.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+
+                if(data.success){
+                    var machines = data.machines;
+                    $("#searchTable tr").empty();
+                    var row = "<tr><th>消费者名称</th></tr>";
+                    $("#searchTable").append(row);
+                    for(var i=0; i<machines.length;i++) {
+                        var dataRow = "<tr><td>"+machines[i]+"</td></tr>";
+                        $("#searchTable").append(dataRow);
+                    }
+                } else {
+                    alert("未查到任何数据");
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+/*    var refreshSearch = function() {
+        search(zkUrlStore);
+    }*/
+
+
+
+
+</script>
+
+</body>
+</html>
+

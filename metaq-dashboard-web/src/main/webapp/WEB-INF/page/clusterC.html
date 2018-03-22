@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/cluster.css" rel="stylesheet">
+    <link href="css/docs.css" rel="stylesheet">
+    <link rel="shortcut icon" href="img/metaq-32.ico">
+    <script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+    <script type="text/javascript" src="js/jquery.ba-bbq.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/metaq.js"></script>
+    <title>MetaQ-Dashboard</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div><img src="img/metaq-logo.png"/></div>
+    <div class="row-fluid">
+        <#include "/menu.html" />
+        <div class="span8" id="main-content">
+            <div>
+                <table class= "table table-bordered">
+                    <caption><h3>负责人查询(监控者会自动初始为负责人)</h3></caption>
+                    <thead>
+                    <tr>
+                        <th>请先选择Metaq集群连接串</th>
+                        <!---->
+                        <th>操作</th>
+
+                    </tr>
+                    </thead>
+                    <tr>
+                        <td>
+                            <select id="selectZkUrl" name="selectZkUrl" onchange="getInCharge(this.value)">
+                                <option value="-1">——请选择——</option>
+                                <#if zkUrls?exists>
+                                    <#list zkUrls as zkUrl>
+                                        <option value="${zkUrl?if_exists}">${zkUrl?if_exists}</option>
+                                    </#list>
+                                </#if>
+                            </select>
+                        </td>
+                        <td>
+                            <button id="refreshInChargeButton" class="btn hide" onclick="refreshInCharge()">刷新</button>
+                            <button id="modifyInChargeButton" class="btn hide" onclick="prepareModifyInCharge('add')">新增负责人</button><br><br>
+                        </td>
+
+                    </tr>
+
+
+                </table>
+
+                <div id="addInChargeDiv" class="hide" style="position:fixed; margin-left:120px; margin-top:-200px; z-index: 99;background-color:white; width:30%;height:55%;overflow:auto;border:1px solid lightgrey;color:#7B7B7B">
+                    <p style="margin:0 0 12px;height:24px;line-height:24px;background-color:#BEBEBE;"></p>
+                    &nbsp;&nbsp;<font style="font-size:15px;">请依次选择group和topic信息：</font><br><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;group名称：<select id="selectGroup" name="selectGroup"  onchange="getTopics(this.value)">
+                        <option value="-1">——请选择——</option>
+                    </select>
+                    <br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;topic名称：&nbsp;&nbsp;<select id="selectTopic" name="selectTopic">
+                        <option value="-1">——请选择——</option>
+                    </select>
+                    <br>
+                    &nbsp;&nbsp;<font style="font-size:15px;">请对将要添加的用户进行身份验证：</font><br><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;域账户：<input id="userName1" name="userName1" type="text" style="width:150px" value="">@sohu-inc.com<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;域密码：<input id="password1" name="password1" type="password" style="width:150px" value=""><br>
+                    <span style="margin-left: 120px"><button id="addInCharge" class="btn" onclick="modifyInCharge('add',$('#selectGroup').val(),$('#selectTopic').val())">新增</button>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button id="addInChargeCancel" class="btn" onclick="cancelModifyInCharge('add')">取消</button></span>
+                </div>
+
+                <div id="delInChargeDiv" class="hide" style="position:fixed; margin-left:120px; margin-top:-80px; z-index: 99;background-color:white; width:30%;height:38%;overflow:auto;border:1px solid lightgrey;color:#7B7B7B">
+                    <p style="margin:0 0 12px;height:24px;line-height:24px;background-color:#BEBEBE;"></p>
+                    &nbsp;&nbsp;<font style="font-size:15px;">请对将要删除的用户进行身份验证：</font><br><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;域账户：<input id="userName2" name="userName2" type="text" style="width:150px" value="">@sohu-inc.com<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;域密码：<input id="password2" name="password2" type="password" style="width:150px" value=""><br>
+                    <input id="group4Del" name="group4Del" type="hidden" value="-1"/>
+                    <input id="topic4Del" name="topic4Del" type="hidden" value="-1"/>
+                    <span style="margin-left: 120px"><button id="delInCharge" class="btn" onclick="modifyInCharge('del',$('#group4Del').val(),$('#topic4Del').val())">删除</button>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button id="delInChargeCancel" class="btn" onclick="cancelModifyInCharge('del')">取消</button></span>
+                </div>
+
+                <table id="personInChargeTable" class= "table table-bordered">
+
+                </table>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    var zkUrlStore = "-1";
+    var groupStore = "-1";
+    var topicStore = "-1";
+
+    var getInCharge = function(zkUrl) {
+        zkUrlStore = zkUrl;
+
+        var dataSet = {
+            'zkUrl':zkUrl
+        };
+        jQuery.ajax({
+            type: "POST",
+            url: "getInCharge.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                $("#refreshInChargeButton").removeClass().addClass("btn");
+                $("#modifyInChargeButton").removeClass().addClass("btn");
+                if(data.success){
+                    var inChargePersons = data.inChargePersons;
+                    $("#personInChargeTable tr").empty();
+                    var row = "<tr><th>group名称</th><th>topic名称</th><th>负责人</th><th>操作</th></tr>";
+                    $("#personInChargeTable").append(row);
+                    for(var i=0; i<inChargePersons.length;i++) {
+                        var inChargePerson = new Array();
+                        inChargePerson = inChargePersons[i].split("#");
+                        var dataRow = "<tr><td>"+inChargePerson[0]+"</td><td>"+inChargePerson[1]+"</td><td>"+inChargePerson[2]+"</td><td><button  class=\"btn\" onclick=\"prepareModifyInCharge('"+"del"+"','"+inChargePerson[0]+"','"+inChargePerson[1]+"')\">删除</button></td></tr>";
+                        $("#personInChargeTable").append(dataRow);
+                    }
+                } else {
+                    alert("未查到任何数据");
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var refreshInCharge = function() {
+        getInCharge(zkUrlStore);
+    }
+
+    var prepareModifyInCharge = function(operation,group,topic) {
+        if(operation == "add") {
+            $("#addInChargeDiv").removeClass();
+            getGroups(zkUrlStore);
+            jQuery("#selectTopic").empty();
+            jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+        }
+
+        if(operation == "del") {
+            $("#delInChargeDiv").removeClass();
+            $("#group4Del").val(group);
+            $("#topic4Del").val(topic);
+        }
+    }
+
+    var cancelModifyInCharge = function(operation) {
+        if(operation == "add") {
+            $("#addInChargeDiv").removeClass().addClass("hide");
+            $("#userName1").val("");
+            $("#password1").val("");
+        }
+
+        if(operation == "del") {
+            $("#delInChargeDiv").removeClass().addClass("hide");
+            $("#userName2").val("");
+            $("#password2").val("");
+        }
+    }
+
+    var modifyInCharge = function(operation,group,topic) {
+        //alert(group + "," + topic + "," + operation);
+
+        if(operation == "add") {
+            var userName = $("#userName1").val();
+            var password = $("#password1").val();
+            if(group == -1) {
+                alert("请选择group名称");
+                return;
+            }
+            if(topic == -1) {
+                alert("请选择topic名称");
+                return;
+            }
+
+        }
+        if(operation == "del") {
+            var userName = $("#userName2").val();
+            var password = $("#password2").val();
+        }
+        if(userName==""|| password=="") {
+            alert("请填写域账户和域密码");
+            return;
+        }
+
+        var dataSet = {
+            'operation': operation,
+            'zkUrl': zkUrlStore,
+            'group': group,
+            'topic': topic,
+            'userName': userName,
+            'password': password
+        };
+
+        jQuery.ajax({
+            type: "POST",
+            url: "modifyInCharge.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function (data) {
+                if(data.isValidate) {
+                    if(data.success) {
+                        alert("操作成功");
+                        cancelModifyInCharge(operation);
+                        refreshInCharge();
+                    } else {
+                        alert("操作失败,请稍后再试");
+                    }
+                } else {
+                    alert("身份验证失败")
+                }
+            },
+            error: function (xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+
+
+    }
+
+    var getGroups = function(zkUrl) {
+        zkUrlStore = zkUrl;
+
+        if(zkUrl == -1) {
+            jQuery("#selectGroup").empty();
+            jQuery("#selectGroup").append("<option value='-1'>——请选择——</option>");
+            jQuery("#selectTopic").empty();
+            jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+            return;
+        }
+
+        var dataSet = {
+            'zkUrl':zkUrl
+        };
+        jQuery.ajax({
+            async: false,
+            type: "POST",
+            url: "getGroups.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                if(data.success){
+                    var groups = data.groups;
+                    jQuery("#selectGroup").empty();
+                    jQuery("#selectGroup").append("<option value='-1'>——请选择——</option>");
+                    for(var i=0; i<groups.length;i++) {
+                        jQuery("#selectGroup").append("<option value='"+groups[i]+"'>"+groups[i]+"</option>");
+                    }
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+    var getTopics = function(group) {
+        groupStore = group;
+
+        if(group == -1) {
+            jQuery("#selectTopic").empty();
+            jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+            return;
+        }
+
+        var dataSet = {
+            'zkUrl':zkUrlStore,
+            'group':group
+        };
+        jQuery.ajax({
+            async: false,
+            type: "POST",
+            url: "getTopicsByGroup.do",
+            data: dataSet,
+            dataType: "json",
+            cache: false,
+            success: function(data){
+                if(data.success){
+                    var topics = data.topics;
+                    jQuery("#selectTopic").empty();
+                    jQuery("#selectTopic").append("<option value='-1'>——请选择——</option>");
+                    for(var i=0; i<topics.length;i++) {
+                        jQuery("#selectTopic").append("<option value='"+topics[i]+"'>"+topics[i]+"</option>");
+                    }
+                }
+            },
+            error : function(xmlHttpRequest, textStatus, errorThrown) {
+                alert(errorThrown);
+            }
+        });
+    }
+
+</script>
+
+</body>
+</html>
+
